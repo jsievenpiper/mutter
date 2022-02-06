@@ -40,6 +40,7 @@ struct _MetaWaylandWindowConfiguration
   int rel_y;
 
   gboolean has_size;
+  gboolean is_resize;
   int width;
   int height;
 

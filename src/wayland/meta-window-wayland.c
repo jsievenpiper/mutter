@@ -861,6 +861,48 @@ acquire_acked_configuration (MetaWindowWayland       *wl_window,
   return NULL;
 }
 
+gboolean
+meta_window_wayland_is_resize (MetaWindowWayland *wl_window,
+                               int                width,
+                               int                height)
+{
+  MetaWindow *window;
+  int old_width;
+  int old_height;
+
+  if (wl_window->pending_configurations)
+    {
+      old_width = wl_window->last_sent_width;
+      old_height = wl_window->last_sent_height;
+    }
+  else
+    {
+      window = META_WINDOW (wl_window);
+      old_width = window->rect.width;
+      old_height = window->rect.height;
+    }
+
+  return !wl_window->has_last_sent_configuration ||
+         old_width != width ||
+         old_height != height;
+}
+
+static gboolean
+meta_window_wayland_is_client_resize (MetaWindowWayland *wl_window)
+{
+  GList *l;
+
+  for (l = wl_window->pending_configurations; l; l = l->next)
+    {
+      MetaWaylandWindowConfiguration *configuration = l->data;
+
+      if (configuration->is_resize)
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 int
 meta_window_wayland_get_geometry_scale (MetaWindow *window)
 {
@@ -921,6 +963,7 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
   MetaMoveResizeFlags flags;
   MetaWaylandWindowConfiguration *acked_configuration;
   gboolean is_window_being_resized;
+  gboolean is_client_resize;
 
   /* new_geom is in the logical pixel coordinate space, but MetaWindow wants its
    * rects to represent what in turn will end up on the stage, i.e. we need to
@@ -943,6 +986,8 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
   window->custom_frame_extents.top = new_geom.y;
 
   flags = META_MOVE_RESIZE_WAYLAND_FINISH_MOVE_RESIZE;
+
+  is_client_resize = meta_window_wayland_is_client_resize (wl_window);
 
   acked_configuration = acquire_acked_configuration (wl_window, pending);
 
@@ -994,7 +1039,11 @@ meta_window_wayland_finish_move_resize (MetaWindow              *window,
     }
 
   if (rect.width != window->rect.width || rect.height != window->rect.height)
-    flags |= META_MOVE_RESIZE_RESIZE_ACTION;
+    {
+      flags |= META_MOVE_RESIZE_RESIZE_ACTION;
+      if (is_client_resize)
+        flags |= META_MOVE_RESIZE_WAYLAND_CLIENT_RESIZE;
+    }
 
   if (window->display->grab_window == window)
     gravity = meta_resize_gravity_from_grab_op (window->display->grab_op);

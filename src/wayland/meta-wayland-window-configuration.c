@@ -21,24 +21,9 @@
 #include "config.h"
 
 #include "wayland/meta-wayland-window-configuration.h"
+#include "wayland/meta-window-wayland.h"
 
 static uint32_t global_serial_counter = 0;
-
-static gboolean
-is_window_size_fixed (MetaWindow *window)
-{
-  if (meta_window_is_fullscreen (window))
-    return TRUE;
-
-  if (meta_window_get_maximized (window) &
-      (META_MAXIMIZE_VERTICAL | META_MAXIMIZE_HORIZONTAL))
-    return TRUE;
-
-  if (meta_window_get_tile_mode (window) != META_TILE_NONE)
-    return TRUE;
-
-  return FALSE;
-}
 
 MetaWaylandWindowConfiguration *
 meta_wayland_window_configuration_new (MetaWindow          *window,
@@ -50,7 +35,10 @@ meta_wayland_window_configuration_new (MetaWindow          *window,
                                        MetaMoveResizeFlags  flags,
                                        MetaGravity          gravity)
 {
+  MetaWindowWayland *wl_window;
   MetaWaylandWindowConfiguration *configuration;
+
+  wl_window = META_WINDOW_WAYLAND (window);
 
   configuration = g_new0 (MetaWaylandWindowConfiguration, 1);
   *configuration = (MetaWaylandWindowConfiguration) {
@@ -70,15 +58,11 @@ meta_wayland_window_configuration_new (MetaWindow          *window,
       configuration->y = y;
     }
 
-  if (flags & META_MOVE_RESIZE_RESIZE_ACTION ||
-      is_window_size_fixed (window) ||
-      window->rect.width != width ||
-      window->rect.height != height)
-    {
-      configuration->has_size = TRUE;
-      configuration->width = width;
-      configuration->height = height;
-    }
+  configuration->has_size = (width != 0 && height != 0);
+  configuration->is_resize =
+    meta_window_wayland_is_resize (wl_window, width, height);
+  configuration->width = width;
+  configuration->height = height;
 
   return configuration;
 }
@@ -101,6 +85,7 @@ meta_wayland_window_configuration_new_relative (int rel_x,
     .rel_y = rel_y,
 
     .has_size = TRUE,
+    .is_resize = TRUE,
     .width = width,
     .height = height,
 
